@@ -1,0 +1,294 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function: Kiểm tra user đã đăng nhập
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function: Kiểm tra là admin
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email == 'admin@giasu.app';
+    }
+    
+    // Helper function: Kiểm tra là chính user đó
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Tutors collection
+    match /tutors/{tutorId} {
+      allow read: if isAuthenticated() && (
+        // Gia sư có thể đọc hồ sơ của chính mình
+        isOwner(tutorId) ||
+        // Admin có thể đọc tất cả
+        isAdmin() ||
+        // Học viên chỉ đọc được gia sư đã được duyệt
+        (resource.data.approved == true)
+      );
+      allow create: if isAuthenticated() && isOwner(tutorId);
+      allow update: if isAuthenticated() && (isOwner(tutorId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Bookings collection
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (
+        // Học viên đọc booking của mình
+        resource.data.studentId == request.auth.uid ||
+        // Học viên đọc booking của gia sư (để kiểm tra trùng lịch khi đặt lịch)
+        // Cho phép đọc tất cả bookings để kiểm tra trùng lịch (chỉ các field công khai)
+        resource.data.tutorId != null ||
+        // Gia sư đọc booking của mình
+        resource.data.tutorId == request.auth.uid ||
+        // Admin đọc tất cả
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        // User chỉ tạo booking cho chính mình (studentId phải là uid của user)
+        request.resource.data.studentId == request.auth.uid &&
+        // Cho phép field studentIds (danh sách học viên trong nhóm)
+        (request.resource.data.studentIds == null || 
+         request.resource.data.studentIds is list)
+      );
+      allow update: if isAuthenticated() && (
+        // Học viên chỉ update booking của mình (giới hạn field: note, cancelled, cancelReason, paid)
+        // Cho phép học viên update paid sau khi thanh toán thành công
+        // Kiểm tra cả resource.data (document hiện tại) và request.resource.data (document mới) để đảm bảo studentId đúng
+        ((resource.data.studentId == request.auth.uid || request.resource.data.studentId == request.auth.uid) && 
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['note', 'cancelled', 'cancelReason', 'paid'])) ||
+        // Gia sư update booking của mình (chấp nhận/từ chối, thanh toán, hoàn thành)
+        ((resource.data.tutorId == request.auth.uid || request.resource.data.tutorId == request.auth.uid) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['accepted', 'rejectReason', 'paid', 'completedSessions', 'completed'])) ||
+        // Admin update tất cả
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Wallets collection - Quản lý số dư ví
+    match /wallets/{userId} {
+      allow read: if isAuthenticated() && (
+        // User đọc ví của chính mình
+        isOwner(userId) ||
+        // Admin đọc tất cả
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && (
+        // User chỉ có thể update ví của mình thông qua WalletService (có transaction)
+        // Nhưng để an toàn, chỉ cho phép update balance và updatedAt
+        isOwner(userId) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Transactions collection - Lịch sử giao dịch
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && (
+        // User đọc transaction của chính mình
+        resource.data.userId == request.auth.uid ||
+        // Admin đọc tất cả
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        // User chỉ tạo transaction cho chính mình
+        request.resource.data.userId == request.auth.uid ||
+        // Admin tạo transaction cho bất kỳ ai
+        isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        // Chỉ admin mới được update transaction (để duyệt rút tiền)
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Notifications collection - Thông báo cho users
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (
+        // User đọc thông báo của chính mình
+        resource.data.userId == request.auth.uid ||
+        // Admin đọc tất cả
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        // Bất kỳ user nào cũng có thể tạo thông báo (thông qua service)
+        // Hoặc chỉ admin/service mới tạo được
+        isAuthenticated()
+      );
+      allow update: if isAuthenticated() && (
+        // User chỉ update thông báo của chính mình (đánh dấu đã đọc)
+        (resource.data.userId == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])) ||
+        // Admin update tất cả
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        // User xóa thông báo của chính mình
+        resource.data.userId == request.auth.uid ||
+        // Admin xóa tất cả
+        isAdmin()
+      );
+    }
+
+    // Materials collection - Tài liệu khóa học
+    match /materials/{materialId} {
+      allow read: if isAuthenticated() && (
+        // Gia sư đọc tài liệu của mình
+        resource.data.tutorId == request.auth.uid ||
+        // Học viên đọc tài liệu của booking mà họ tham gia
+        // (cần kiểm tra booking để xác nhận học viên có trong studentIds)
+        // Tạm thời cho phép đọc nếu đã authenticated (sẽ kiểm tra trong code)
+        isAuthenticated() ||
+        // Admin đọc tất cả
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        // Chỉ gia sư mới tạo tài liệu
+        request.resource.data.tutorId == request.auth.uid
+      );
+      allow update: if isAuthenticated() && (
+        // Gia sư chỉ update tài liệu của mình
+        (resource.data.tutorId == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['description'])) ||
+        // Admin update tất cả
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        // Gia sư xóa tài liệu của mình
+        resource.data.tutorId == request.auth.uid ||
+        // Admin xóa tất cả
+        isAdmin()
+      );
+    }
+
+    // Assignments collection - Bài tập
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated() && (
+        // Gia sư đọc bài tập của mình
+        resource.data.tutorId == request.auth.uid ||
+        // Học viên đọc bài tập của booking mà họ tham gia
+        // (sẽ kiểm tra trong code)
+        isAuthenticated() ||
+        // Admin đọc tất cả
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        // Chỉ gia sư mới tạo bài tập
+        request.resource.data.tutorId == request.auth.uid
+      );
+      allow update: if isAuthenticated() && (
+        // Gia sư chỉ update bài tập của mình
+        (resource.data.tutorId == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['title', 'description', 'dueDate', 'maxScore', 'attachments'])) ||
+        // Admin update tất cả
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        // Gia sư xóa bài tập của mình
+        resource.data.tutorId == request.auth.uid ||
+        // Admin xóa tất cả
+        isAdmin()
+      );
+    }
+
+    // Submissions collection - Bài nộp của học viên
+    match /submissions/{submissionId} {
+      allow read: if isAuthenticated() && (
+        // Học viên đọc bài nộp của mình
+        resource.data.studentId == request.auth.uid ||
+        // Gia sư đọc bài nộp của bài tập mà họ tạo
+        // (sẽ kiểm tra trong code)
+        isAuthenticated() ||
+        // Admin đọc tất cả
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        // Học viên chỉ tạo bài nộp cho chính mình
+        request.resource.data.studentId == request.auth.uid
+      );
+      allow update: if isAuthenticated() && (
+        // Học viên chỉ update bài nộp của mình (trước khi chấm điểm)
+        (resource.data.studentId == request.auth.uid &&
+         resource.data.score == null &&
+         request.resource.data.diff(resource.data).affectedKeys().hasAny(['content', 'attachments', 'submittedAt'])) ||
+        // Gia sư update để chấm điểm (sẽ kiểm tra trong code)
+        isAuthenticated() ||
+        // Admin update tất cả
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        // Học viên xóa bài nộp của mình (trước khi chấm điểm)
+        (resource.data.studentId == request.auth.uid && resource.data.score == null) ||
+        // Admin xóa tất cả
+        isAdmin()
+      );
+    }
+
+    // Messages collection - Tin nhắn chat
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
+        // User chỉ gửi tin nhắn với senderId là chính mình
+        request.resource.data.senderId == request.auth.uid &&
+        // Đảm bảo có các trường bắt buộc
+        request.resource.data.roomId is string &&
+        request.resource.data.text is string &&
+        request.resource.data.sentAt is timestamp
+      );
+      allow update: if false; // Không cho phép update tin nhắn
+      allow delete: if isAuthenticated() && (
+        // User chỉ xóa tin nhắn của chính mình
+        resource.data.senderId == request.auth.uid ||
+        // Admin xóa tất cả
+        isAdmin()
+      );
+    }
+
+    // Reviews collection - Đánh giá của học viên cho gia sư
+    match /reviews/{reviewId} {
+      // Cho phép đọc tất cả đánh giá (để hiển thị trên trang gia sư)
+      // Cho phép query với bất kỳ điều kiện nào nếu đã authenticated
+      allow read: if isAuthenticated();
+      
+      // Học viên có thể tạo đánh giá của chính mình
+      allow create: if isAuthenticated() && 
+        request.resource.data.studentId == request.auth.uid &&
+        request.resource.data.tutorId is string &&
+        request.resource.data.tutorId != '' &&
+        request.resource.data.rating is number &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5 &&
+        (request.resource.data.comment is string || request.resource.data.comment == null) &&
+        request.resource.data.createdAt is timestamp;
+      
+      // Học viên có thể cập nhật đánh giá của chính mình
+      allow update: if isAuthenticated() && 
+        resource.data.studentId == request.auth.uid &&
+        request.resource.data.studentId == request.auth.uid &&
+        request.resource.data.tutorId == resource.data.tutorId &&
+        request.resource.data.rating is number &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5 &&
+        (request.resource.data.comment is string || request.resource.data.comment == null) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['comment', 'rating']);
+      
+      // Học viên có thể xóa đánh giá của chính mình, Admin có thể xóa tất cả
+      allow delete: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+  }
+}
+

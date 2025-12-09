@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "184018470808",
+    "project_id": "ketnoigiasu-91fd3",
+    "storage_bucket": "ketnoigiasu-91fd3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184018470808:android:a5fc1a35d117c980d14ded",
+        "android_client_info": {
+          "package_name": "com.example.giasuvahocsinh"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvMAcLcSpLknXNJYhU8CX_MrNw2WivgxE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

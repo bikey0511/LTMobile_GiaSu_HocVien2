@@ -1,0 +1,41 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Tutors collection - ảnh đại diện và QR code của gia sư
+    match /tutors/{tutorId}/{allPaths=**} {
+      // Gia sư có thể upload/update/xóa ảnh của chính mình
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == tutorId;
+    }
+    
+    // Course materials - Tài liệu khóa học
+    match /course-materials/{bookingId}/{fileName} {
+      // Học viên và gia sư có thể đọc tài liệu
+      allow read: if request.auth != null;
+      // Chỉ gia sư mới upload tài liệu (sẽ kiểm tra trong code)
+      allow write: if request.auth != null;
+    }
+    
+    // Assignments - File đính kèm bài tập
+    match /assignments/{assignmentId}/{fileName} {
+      // Học viên và gia sư có thể đọc file
+      allow read: if request.auth != null;
+      // Chỉ gia sư mới upload file (sẽ kiểm tra trong code)
+      allow write: if request.auth != null;
+    }
+    
+    // Submissions - File bài nộp của học viên
+    match /submissions/{submissionId}/{fileName} {
+      // Học viên và gia sư có thể đọc file
+      allow read: if request.auth != null;
+      // Học viên upload file bài nộp (sẽ kiểm tra trong code)
+      allow write: if request.auth != null;
+    }
+    
+    // Default: không cho phép truy cập
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
