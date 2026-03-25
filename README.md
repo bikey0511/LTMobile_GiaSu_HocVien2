@@ -52,11 +52,6 @@ A full-featured mobile application that connects tutors and students, supporting
 
 ---
 
-## 📷 Screenshots
-
-> (Add screenshots here)
-
----
 
 ## ⚙️ Installation
 
