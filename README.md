@@ -1,16 +1,58 @@
-# giasuvahocsinh
+# 📚 Tutor – Student Matching Platform (Flutter)
 
-A new Flutter project.
+A full-featured mobile application that connects tutors and students, supporting booking, real-time chat, and online learning.
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## 🚀 Features
 
-A few resources to get you started if this is your first Flutter project:
+### 🔐 Authentication & Authorization
+- Sign up / Login (Email & Password, Google OAuth)
+- Role-based access control (Admin / Tutor / Student)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### 📅 Booking System
+- Create, accept/reject bookings
+- Track class status and history
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### 💬 Real-time Chat
+- 1-1 and group chat using Firebase Firestore
+- Message history storage
+
+### 🎥 Video Call
+- Integrated online class via Jitsi Meet
+
+### 💰 Wallet & Payment
+- QR-based payment flow
+- Users upload payment proof
+- Admin verifies and updates balance
+- Transaction status: pending / approved / rejected
+
+### 🌐 Other Features
+- Localization (Vietnamese / English)
+- Responsive UI
+- State management with Provider
+
+---
+
+## 🛠 Tech Stack
+
+- **Flutter, Dart**
+- **Firebase (Auth, Firestore, Storage)**
+- Provider (State Management)
+- REST API
+- Jitsi Meet (Video Call)
+- Git
+
+---
+
+## 🧠 Architecture
+
+- Provider Pattern (State Management)
+- Repository Pattern (Data Layer)
+## ⚙️ Installation
+
+```bash
+git clone https://github.com/bikey0511/tutor-student-flutter-app.git
+cd tutor-student-flutter-app
+flutter pub get
+flutter run
